@@ -5,7 +5,7 @@
   "bin": { "db" : "./db" },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ggedde/dbcli.git"
+    "url": "git+https://github.com/ggedde/db-cli.git"
   },
   "keywords": [
     "DB",
@@ -18,7 +18,7 @@
   "author": "https://github.com/ggedde",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ggedde/dbcli/issues"
+    "url": "https://github.com/ggedde/db-cli/issues"
   },
-  "homepage": "https://github.com/ggedde/dbcli#readme"
+  "homepage": "https://github.com/ggedde/db-cli#readme"
 }
