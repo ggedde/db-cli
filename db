@@ -57,6 +57,10 @@ then
     echo ""
     echo "    -a   Also add a new project_config_file to ${DATABASES_DIR}"
 	echo ""
+    echo "db list"
+	echo ""
+	echo "    List all Project Config Files in the Databases Folder"
+	echo ""
 
 	exit
 fi

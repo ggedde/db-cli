@@ -3,7 +3,7 @@
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/ggedde/dbcli) &nbsp; ![GitHub](https://img.shields.io/github/license/ggedde/dbcli?label=license)
 
 
-### Database CLI tool for Creating, Copying, and Syncing databases quickly. It can create local databases, copy local or remote database or copy remote to local databases. It cannot write to remote databases.  
+#### Database CLI tool for Creating, Copying, and Syncing databases quickly. It can create local databases, copy local or remote database or copy remote to local databases. It cannot write to remote databases. It uses Project Config Files to store the settings for each project. Prject Config files and Backups will be stored in ~/.dbcli
 
 \* Currently only supports mysql and mariadb  
 \* All Databases are collated as utf8mb4_unicode_ci
@@ -35,3 +35,8 @@
 &nbsp; &nbsp; Creates a new database on your localhost
 
 &nbsp; &nbsp; -a &nbsp; Also add a new project_config_file
+
+
+### db list
+
+&nbsp; &nbsp; List all Project Config Files in the Databases Folder
