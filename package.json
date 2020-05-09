@@ -1,6 +1,6 @@
 {
   "name": "@ggedde/db-cli",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Database CLI tool for Creating, Copying, and Syncing databases quickly",
   "bin": {
     "db": "./db"

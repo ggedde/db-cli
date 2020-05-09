@@ -6,7 +6,9 @@
 #### Database CLI tool for Creating, Copying, and Syncing databases quickly. It can create local databases, copy local or remote database or copy remote to local databases. It cannot write to remote databases. It uses Project Config Files to store the settings for each project. Prject Config files and Backups will be stored in ~/.dbcli
 
 \* Currently only supports mysql and mariadb  
-\* All Databases are collated as utf8mb4_unicode_ci
+\* All Databases are collated as utf8mb4_unicode_ci  
+
+![](db-cli.gif)
 
 # Installation
     npm i --global @ggedde/db-cli
