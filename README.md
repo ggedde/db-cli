@@ -11,7 +11,11 @@
 # Installation
     npm i --global @ggedde/db-cli
 
-Test that the CLI is working
+Test that the CLI is working and see what Version it is
+    
+    db -v
+
+See Help
     
     db -h
 
