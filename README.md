@@ -9,7 +9,7 @@
 \* All Databases are collated as utf8mb4_unicode_ci
 
 # Installation
-    npm -i --global @ggedde/db-cli
+    npm i --global @ggedde/db-cli
 
 Test that the CLI is working
     
