@@ -11,7 +11,7 @@ REMOTE_ONLY=""
 ADD_CONFIG_ON_CREATE=""
 REMOTE_DBCA_CERT=""
 LOCAL_DBCA_CERT=""
-VERSION="1.0.7"
+VERSION="1.1.0"
 
 ERROR_COLOR=`tput setaf 1`
 RUNNING_COLOR=`tput setaf 6`
@@ -58,9 +58,13 @@ then
     echo ""
     echo "    -a   Also add a new project_config_file to ${DATABASES_DIR}"
 	echo ""
-    echo "db list"
+    echo "db databases"
 	echo ""
 	echo "    List all Project Config Files in the Databases Folder"
+	echo ""
+    echo "db backups"
+	echo ""
+	echo "    List all Backup Files in the Backups Folder"
 	echo ""
 
 	exit
@@ -71,7 +75,7 @@ then
 	COMMAND=$1
 fi
 
-if [ "$COMMAND" != 'copy' ] && [ "$COMMAND" != 'backup' ] && [ "$COMMAND" != 'add' ] && [ "$COMMAND" != 'create' ] && [ "$COMMAND" != 'list' ] && [ "$COMMAND" != '-v' ] && [ "$COMMAND" != 'version' ]
+if [ "$COMMAND" != 'copy' ] && [ "$COMMAND" != 'backup' ] && [ "$COMMAND" != 'add' ] && [ "$COMMAND" != 'create' ] && [ "$COMMAND" != 'databases' ] && [ "$COMMAND" != 'backups' ] && [ "$COMMAND" != '-v' ] && [ "$COMMAND" != 'version' ]
 then
 	echo "${ERROR_COLOR}Error: Command not found.  ${NO_COLOR}See: db -h"
 	exit
@@ -151,9 +155,18 @@ spinner() {
     fi
 }
 
-if [ "$COMMAND" == "list" ]
+if [ "$COMMAND" == "databases" ]
 then
     for entry in "$DATABASES_DIR"/*
+    do
+        echo "$entry"
+    done
+    exit
+fi
+
+if [ "$COMMAND" == "backups" ]
+then
+    for entry in "$BACKUPS_DIR"/*
     do
         echo "$entry"
     done
