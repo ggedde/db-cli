@@ -1,4 +1,4 @@
-# dbcli
+# db-cli
 
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/ggedde/dbcli) &nbsp; ![GitHub](https://img.shields.io/github/license/ggedde/dbcli?label=license)
 

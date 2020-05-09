@@ -1,0 +1,24 @@
+{
+  "name": "@ggedde/dbcli",
+  "version": "1.0.0",
+  "description": "Database CLI tool for Creating, Copying, and Syncing databases quickly",
+  "bin": { "db" : "./db" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ggedde/dbcli.git"
+  },
+  "keywords": [
+    "DB",
+    "Database",
+    "Sync",
+    "Database",
+    "Backup",
+    "CLI"
+  ],
+  "author": "https://github.com/ggedde",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ggedde/dbcli/issues"
+  },
+  "homepage": "https://github.com/ggedde/dbcli#readme"
+}
