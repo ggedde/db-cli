@@ -1,0 +1,552 @@
+#!/bin/bash
+
+DIR="$HOME/.dbcli"
+DATABASES_DIR="$DIR/databases"
+BACKUPS_DIR="$DIR/backups"
+COMMAND=""
+PROJECT_CONFIG_FILE=""
+OMIT_BACKUP=""
+LOCAL_ONLY=""
+REMOTE_ONLY=""
+ADD_CONFIG_ON_CREATE=""
+REMOTE_DBCA_CERT=""
+LOCAL_DBCA_CERT=""
+
+ERROR_COLOR=`tput setaf 1`
+RUNNING_COLOR=`tput setaf 6`
+SUCCESS_COLOR=`tput setaf 2`
+NO_COLOR=`tput sgr0` # No Color
+
+if [ $1 ] && [ $1 == "-h" ]
+then
+    echo ""
+    echo ""
+	echo "dbcli Version: 1.0"
+	echo "https://github.com/ggedde/dbcli"
+    echo ""
+    echo "Backups Directory: $BACKUPS_DIR"
+    echo "Database Config Files Directory: $DATABASES_DIR"
+    echo ""
+	echo "This script can create local databases, copy local or remote database or copy remote to local databases. It cannot write to remote databases."
+	echo "It will create backup files in ${BACKUPS_DIR} folder. You will need to empty these files accordingly."
+	echo ""
+    echo ""
+	echo "db copy [-o] [project_config_file]"
+	echo ""
+	echo "    project_config_file points to the file located here ${DATABASES_DIR}. You can add a config file by using 'db add [config_name]'"
+	echo ""
+    echo "    -o   Copies database from remote to local, but does not create any backup files. Use only if you are sure you will not need to revert back."
+	echo ""
+    echo ""
+	echo "db backup [-l | -r] [project_config_file]"
+	echo ""
+	echo "    Backsup databases from both local and remote to ${BACKUPS_DIR}"
+	echo ""
+	echo "    -l   Backsup local database Only"
+	echo "    -r   Backsup remote database Only"
+	echo ""
+    echo ""
+    echo "db add [project_config_file]"
+	echo ""
+	echo "    Adds a new project_config_file to ${DATABASES_DIR}, but does not create a local database"
+	echo ""
+    echo ""
+    echo "db create [-a] [project_config_file]"
+	echo ""
+	echo "    Creates a new database on your localhost"
+    echo ""
+    echo "    -a   Also add a new project_config_file to ${DATABASES_DIR}"
+	echo ""
+
+	exit
+fi
+
+if [ $1 ]
+then
+	COMMAND=$1
+fi
+
+if [ "$COMMAND" != 'copy' ] && [ "$COMMAND" != 'backup' ] && [ "$COMMAND" != 'add' ] && [ "$COMMAND" != 'create' ] && [ "$COMMAND" != 'list' ]
+then
+	echo "${ERROR_COLOR}Error: Command not found.  ${NO_COLOR}See: db -h"
+	exit
+fi
+
+for var in "$@"
+do
+    if [ "$var" == "-o" ]
+    then
+        OMIT_BACKUP=1
+    elif [ "$var" == "-l" ]
+    then
+        LOCAL_ONLY=1
+    elif [ "$var" == "-r" ]
+    then
+        REMOTE_ONLY=1
+    elif [ "$var" == "-a" ]
+    then
+        ADD_CONFIG_ON_CREATE=1
+    elif [ "$var" != "$COMMAND" ]
+    then
+        PROJECT_CONFIG_FILE="$var"
+    fi
+done
+
+_SPINNER_POS=0
+_TASK_OUTPUT=""
+CYAN=$(tput setaf 6)
+NORMAL=$(tput sgr0)
+BOLD=$(tput bold)
+
+spinner() {
+    _TASK_OUTPUT=""
+    local delay=0.05
+    local list=( $(echo -e '\xe2\xa0\x8b')
+                 $(echo -e '\xe2\xa0\x99')
+                 $(echo -e '\xe2\xa0\xb9')
+                 $(echo -e '\xe2\xa0\xb8')
+                 $(echo -e '\xe2\xa0\xbc')
+                 $(echo -e '\xe2\xa0\xb4')
+                 $(echo -e '\xe2\xa0\xa6')
+                 $(echo -e '\xe2\xa0\xa7')
+                 $(echo -e '\xe2\xa0\x87')
+                 $(echo -e '\xe2\xa0\x8f'))
+    local i=$_SPINNER_POS
+    local tempfile
+    tempfile=$(mktemp)
+
+    eval $2 >> $tempfile 2>/dev/null &
+    local pid=$!
+
+    tput sc
+    printf "%s %s" "${list[i]}" "$1"
+    tput el
+    tput rc
+
+    i=$(($i+1))
+    i=$(($i%10))
+
+    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+        printf "%s" "${CYAN}${list[i]}${NORMAL}"
+        i=$(($i+1))
+        i=$(($i%10))
+        sleep $delay
+        printf "\b\b\b"
+    done
+    _TASK_OUTPUT="$(cat $tempfile)"
+    rm $tempfile
+    _SPINNER_POS=$i
+
+    if [ -z $3 ]; then :; else
+      eval $3=\'"$_TASK_OUTPUT"\'
+    fi
+}
+
+if [ "$COMMAND" == "list" ]
+then
+    for entry in "$DATABASES_DIR"/*
+    do
+        echo "$entry"
+    done
+    exit
+fi
+
+if [ "$PROJECT_CONFIG_FILE" == "" ]
+then
+	echo "${ERROR_COLOR}Error: Missing Project Config File.  ${NO_COLOR}See: db -h"
+	exit
+fi
+
+if [ ! -d "$DIR" ]
+then
+    echo "${RUNNING_COLOR}Creating Directory: ${NO_COLOR}$DIR"
+    mkdir $DIR
+fi
+
+if [ ! -d "$DATABASES_DIR" ]
+then
+    echo "${RUNNING_COLOR}Creating Database Directory: ${NO_COLOR}$DATABASES_DIR"
+    mkdir $DATABASES_DIR
+fi
+
+if [ ! -d "$BACKUPS_DIR" ]
+then
+    echo "${RUNNING_COLOR}Creating Backups Directory: ${NO_COLOR}$BACKUPS_DIR"
+    mkdir $BACKUPS_DIR
+fi
+
+if [ "$COMMAND" == "add" ]
+then
+
+    if [ -f "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}" ]
+    then
+        echo "${ERROR_COLOR}Error: Configuration file already exists for: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+        exit
+    fi
+
+    tput sc
+    printf "\e[96mREMOTE_DB_NAME:\e[0m"
+    read -p ' ' REMOTE_DB_NAME
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mREMOTE_DB_HOST:\e[0m"
+    read -p ' ' REMOTE_DB_HOST
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mREMOTE_DB_PORT:\e[0m"
+    read -p ' ' REMOTE_DB_PORT
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mREMOTE_DB_USER:\e[0m"
+    read -p ' ' REMOTE_DB_USER
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mREMOTE_DB_PASS:\e[0m"
+    read -sp ' ' REMOTE_DB_PASS
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mREMOTE_DB_CERT:\e[0m (Optional)"
+    read -p ' ' REMOTE_DB_CERT
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_NAME:\e[0m"
+    read -p ' ' LOCAL_DB_NAME
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_HOST:\e[0m"
+    read -p ' ' LOCAL_DB_HOST
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_PORT:\e[0m"
+    read -p ' ' LOCAL_DB_PORT
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_USER:\e[0m"
+    read -p ' ' LOCAL_DB_USER
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_PASS:\e[0m"
+    read -sp ' ' LOCAL_DB_PASS
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_CERT:\e[0m  (Optional)"
+    read -p ' ' LOCAL_DB_CERT
+    tput rc
+    tput ed
+    tput el
+    
+    echo ""
+
+    echo "#!/usr/bin/env bash
+REMOTE_DB_NAME='${REMOTE_DB_NAME}'
+REMOTE_DB_HOST='${REMOTE_DB_HOST}'
+REMOTE_DB_PORT='${REMOTE_DB_PORT}'
+REMOTE_DB_USER='${REMOTE_DB_USER}'
+REMOTE_DB_PASS='${REMOTE_DB_PASS}'
+REMOTE_DB_CERT='${REMOTE_DB_CERT}'
+LOCAL_DB_NAME='${LOCAL_DB_NAME}'
+LOCAL_DB_HOST='${LOCAL_DB_HOST}'
+LOCAL_DB_PORT='${LOCAL_DB_PORT}'
+LOCAL_DB_USER='${LOCAL_DB_USER}'
+LOCAL_DB_PASS='${LOCAL_DB_PASS}'
+LOCAL_DB_CERT='${LOCAL_DB_CERT}'
+" > "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+
+    if [ -f "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}" ]
+    then
+        echo "${SUCCESS_COLOR}Configuration file added Successfully!: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+    else
+        echo "${ERROR_COLOR}Error: No Configuration file for: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+    fi
+    echo ""
+    exit
+fi
+
+if [ ! -d $BACKUPS_DIR ]
+then
+	echo "${ERROR_COLOR}Error: Directory $BACKUPS_DIR does not exist. Try Creating it manually and try again.${NO_COLOR}"
+	exit
+fi
+
+if [ "$COMMAND" == "create" ]
+then
+
+    if [ $ADD_CONFIG_ON_CREATE ] && [ -f "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}" ]
+    then
+        echo "${ERROR_COLOR}Error: Configuration file already exists: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+    fi
+
+    tput sc
+    printf "\e[96mLOCAL_DB_NAME:\e[0m"
+    read -p " (${PROJECT_CONFIG_FILE})" LOCAL_DB_NAME
+    tput rc
+    tput ed
+    tput el
+    LOCAL_DB_NAME=${LOCAL_DB_NAME:-$PROJECT_CONFIG_FILE}
+    printf "\e[96mLOCAL_DB_HOST:\e[0m"
+    read -p ' (localhost)' LOCAL_DB_HOST
+    tput rc
+    tput ed
+    tput el
+    LOCAL_DB_HOST=${LOCAL_DB_HOST:-localhost}
+    printf "\e[96mLOCAL_DB_PORT:\e[0m"
+    read -p ' (3306)' LOCAL_DB_PORT
+    tput rc
+    tput ed
+    tput el
+    LOCAL_DB_PORT=${LOCAL_DB_PORT:-3306}
+    printf "\e[96mLOCAL_DB_USER:\e[0m"
+    read -p ' (root)' LOCAL_DB_USER
+    tput rc
+    tput ed
+    tput el
+    LOCAL_DB_USER=${LOCAL_DB_USER:-root}
+    printf "\e[96mLOCAL_DB_PASS:\e[0m"
+    read -sp ' ' LOCAL_DB_PASS
+    tput rc
+    tput ed
+    tput el
+    printf "\e[96mLOCAL_DB_CERT: (Optional)\e[0m"
+    read -p ' ' LOCAL_DB_CERT
+    tput rc
+    tput ed
+    tput el
+
+    if [ $ADD_CONFIG_ON_CREATE ]
+    then
+        printf "\e[96mREMOTE_DB_NAME:\e[0m"
+        read -p ' ' REMOTE_DB_NAME
+        tput rc
+        tput ed
+        tput el
+        printf "\e[96mREMOTE_DB_HOST:\e[0m"
+        read -p ' ' REMOTE_DB_HOST
+        tput rc
+        tput ed
+        tput el
+        printf "\e[96mREMOTE_DB_PORT:\e[0m"
+        read -p ' ' REMOTE_DB_PORT
+        tput rc
+        tput ed
+        tput el
+        printf "\e[96mREMOTE_DB_USER:\e[0m"
+        read -p ' ' REMOTE_DB_USER
+        tput rc
+        tput ed
+        tput el
+        printf "\e[96mREMOTE_DB_PASS:\e[0m"
+        read -sp ' ' REMOTE_DB_PASS
+        tput rc
+        tput ed
+        tput el
+        printf "\e[96mREMOTE_DB_CERT: (Optional)\e[0m"
+        read -p ' ' REMOTE_DB_CERT
+        tput rc
+        tput ed
+        tput el
+
+        echo ""
+
+        echo "#!/usr/bin/env bash
+REMOTE_DB_NAME='${REMOTE_DB_NAME}'
+REMOTE_DB_HOST='${REMOTE_DB_HOST}'
+REMOTE_DB_PORT='${REMOTE_DB_PORT}'
+REMOTE_DB_USER='${REMOTE_DB_USER}'
+REMOTE_DB_PASS='${REMOTE_DB_PASS}'
+REMOTE_DB_CERT='${REMOTE_DB_CERT}'
+LOCAL_DB_NAME='${LOCAL_DB_NAME}'
+LOCAL_DB_HOST='${LOCAL_DB_HOST}'
+LOCAL_DB_PORT='${LOCAL_DB_PORT}'
+LOCAL_DB_USER='${LOCAL_DB_USER}'
+LOCAL_DB_PASS='${LOCAL_DB_PASS}'
+LOCAL_DB_CERT='${LOCAL_DB_CERT}'
+" > "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+
+        if [ -f "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}" ]
+        then
+            echo "${SUCCESS_COLOR}Configuration file added Successfully!: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+        else
+            echo "${ERROR_COLOR}Error: No Configuration file for: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+        fi
+    fi
+
+    if [ "$LOCAL_DB_CERT" != "" ]
+    then
+        LOCAL_DBCA_CERT="--ssl-ca=$LOCAL_DB_CERT"
+    fi
+
+    LOCAL_FIND_DB="SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA"
+
+    LOCAL_CAN_CONNECT_DB=$(mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --port=$LOCAL_DB_PORT --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="$LOCAL_FIND_DB" 2>/dev/null);
+
+    if [ "$LOCAL_CAN_CONNECT_DB" == "" ]
+    then
+        echo "${ERROR_COLOR}Error: Can't Connect to Local DB${NO_COLOR}"
+        exit
+    fi
+    
+    mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="CREATE DATABASE IF NOT EXISTS $LOCAL_DB_NAME COLLATE utf8mb4_unicode_ci" 2>/dev/null
+
+    LOCAL_HAS_DB=$(mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --port=$LOCAL_DB_PORT --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="$LOCAL_FIND_DB WHERE SCHEMA_NAME = '$LOCAL_DB_NAME'" 2>/dev/null);
+
+    if [ "$LOCAL_HAS_DB" == "" ]
+    then
+        echo "${ERROR_COLOR}Error: Could not create local database: ${NO_COLOR}$LOCAL_DB_NAME"
+        exit
+    fi
+
+    echo "${SUCCESS_COLOR}Local Database added Successfully!${NO_COLOR}"
+    tput cnorm && stty echo
+    echo ""
+    exit
+fi
+
+if [ ! -f "${DATABASES_DIR}/${PROJECT_CONFIG_FILE}" ]
+then
+	echo "${ERROR_COLOR}Error: No Configuration file for: ${NO_COLOR}${DATABASES_DIR}/${PROJECT_CONFIG_FILE}"
+	exit
+fi
+
+# Set Defaults
+source ${DATABASES_DIR}/$PROJECT_CONFIG_FILE;
+
+if [ "$REMOTE_DB_CERT" != "" ]
+then
+	REMOTE_DBCA_CERT="--ssl-ca=$REMOTE_DB_CERT"
+fi
+
+if [ "$LOCAL_DB_CERT" != "" ]
+then
+	LOCAL_DBCA_CERT="--ssl-ca=$LOCAL_DB_CERT"
+fi
+
+DT=$(date '+%Y_%m_%d_%H_%M_%S');
+
+backup_remote_db() {
+	mysqldump $REMOTE_DBCA_CERT --host=$REMOTE_DB_HOST --port=$REMOTE_DB_PORT --user=$REMOTE_DB_USER --password=$REMOTE_DB_PASS $REMOTE_DB_NAME 2>/dev/null | gzip > ${BACKUPS_DIR}/${REMOTE_DB_NAME}_${PROJECT_CONFIG_FILE}_REMOTE_BACKUP_$DT.sql.gz
+	echo "${BACKUPS_DIR}/${REMOTE_DB_NAME}_${PROJECT_CONFIG_FILE}_REMOTE_BACKUP_$DT.sql.gz"
+}
+
+backup_local_db() {
+	mysqldump $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS $LOCAL_DB_NAME 2>/dev/null | gzip > ${BACKUPS_DIR}/${LOCAL_DB_NAME}_LOCAL_BACKUP_$DT.sql.gz
+	echo "${BACKUPS_DIR}/${LOCAL_DB_NAME}_LOCAL_BACKUP_$DT.sql.gz"
+}
+
+update_local_db() {
+  	mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="DROP DATABASE IF EXISTS $LOCAL_DB_NAME" 2>/dev/null
+	mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="CREATE DATABASE IF NOT EXISTS $LOCAL_DB_NAME COLLATE utf8mb4_unicode_ci" 2>/dev/null
+	gzip --uncompress --stdout $REMOTE_DB_DOWNLOAD_FILE | mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS $LOCAL_DB_NAME 2>/dev/null
+}
+
+if [ "$COMMAND" == "copy" ] || [ "$COMMAND" == "backup" ]
+then
+
+    if [[ "$COMMAND" == "copy" || ( "$COMMAND" == "backup" && "$LOCAL_ONLY" == "" ) ]]
+    then
+
+        REMOTE_FIND_DB="SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA"
+
+        REMOTE_CAN_CONNECT_DB=$(mysql $REMOTE_DBCA_CERT --host=$REMOTE_DB_HOST --port=$REMOTE_DB_PORT --user=$REMOTE_DB_USER --password=$REMOTE_DB_PASS --execute="$REMOTE_FIND_DB" 2>/dev/null);
+
+        if [ "$REMOTE_CAN_CONNECT_DB" == "" ]
+        then
+            echo "${ERROR_COLOR}Error: Can't Connect to Remote DB${NO_COLOR}"
+            exit
+        fi
+
+        REMOTE_HAS_DB=$(mysql $REMOTE_DBCA_CERT --host=$REMOTE_DB_HOST --port=$REMOTE_DB_PORT --user=$REMOTE_DB_USER --password=$REMOTE_DB_PASS --execute="$REMOTE_FIND_DB WHERE SCHEMA_NAME = '$REMOTE_DB_NAME'" 2>/dev/null);
+
+        if [ "$REMOTE_HAS_DB" == "" ]
+        then
+            echo "${ERROR_COLOR}Error: Server does not have database ${NO_COLOR}$REMOTE_DB_NAME"
+            exit
+        fi
+
+        stty -echo && tput civis
+        spinner "${RUNNING_COLOR}Downloading Remote Database to... ${NO_COLOR}$BACKUPS_DIR/${REMOTE_DB_NAME}_${PROJECT_CONFIG_FILE}_REMOTE_BACKUP_$DT.sql.gz" backup_remote_db REMOTE_DB_DOWNLOAD_FILE
+        tput el
+
+        if [ -f $REMOTE_DB_DOWNLOAD_FILE ]
+        then
+            echo "${SUCCESS_COLOR}Remote File Downloaded Successfully. ${NO_COLOR}Try Again."
+        else
+            echo "${ERROR_COLOR}Error: Downloading file from Server. ${NO_COLOR}Try Again."
+            tput cnorm && stty echo
+            exit
+        fi
+    fi
+
+    if [ ! $OMIT_BACKUP ] && [ "$REMOTE_ONLY" == "" ]
+    then
+
+        LOCAL_FIND_DB="SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA"
+
+        LOCAL_CAN_CONNECT_DB=$(mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --port=$LOCAL_DB_PORT --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="$LOCAL_FIND_DB" 2>/dev/null);
+
+        if [ "$LOCAL_CAN_CONNECT_DB" == "" ]
+        then
+            echo "${ERROR_COLOR}Error: Can't Connect to Local DB${NO_COLOR}"
+            exit
+        fi
+
+        LOCAL_HAS_DB=$(mysql $LOCAL_DBCA_CERT --host=$LOCAL_DB_HOST --port=$LOCAL_DB_PORT --user=$LOCAL_DB_USER --password=$LOCAL_DB_PASS --execute="$LOCAL_FIND_DB WHERE SCHEMA_NAME = '$LOCAL_DB_NAME'" 2>/dev/null);
+
+        if [ "$LOCAL_HAS_DB" == "" ]
+        then
+            echo "${ERROR_COLOR}Error: Server does not have database ${NO_COLOR}$LOCAL_DB_NAME"
+            exit
+        fi
+
+        stty -echo && tput civis
+        spinner "${RUNNING_COLOR}Backing Up Local to... ${NO_COLOR}$BACKUPS_DIR/${LOCAL_DB_NAME}_LOCAL_BACKUP_$DT.sql.gz" backup_local_db LOCAL_DB_BACKUP_FILE
+        tput el
+
+        if [ -f $LOCAL_DB_BACKUP_FILE ]
+        then
+            echo "${SUCCESS_COLOR}Local Database Backed Up Successfully. ${NO_COLOR}"
+        else 
+            echo "${ERROR_COLOR}Error: Creating Local Backup File. ${NO_COLOR}Try Again."
+            tput cnorm && stty echo
+            exit
+        fi
+    fi
+
+    if [ "$COMMAND" == "backup" ]
+    then
+        echo "${SUCCESS_COLOR}Backup Complete!${NO_COLOR}"
+        echo ""
+        tput cnorm && stty echo
+        exit
+    fi
+
+    if [ "$COMMAND" == "copy" ]
+    then
+        stty -echo && tput civis
+        spinner "${RUNNING_COLOR}Updating Local Database...${NO_COLOR}" update_local_db
+        tput el
+
+        if [ $OMIT_BACKUP ]
+        then
+            rm $REMOTE_DB_DOWNLOAD_FILE
+        fi
+
+        echo "${SUCCESS_COLOR}Local Database Updated${NO_COLOR}"
+        echo "Done!"
+        echo ""
+        tput cnorm && stty echo
+        exit
+    fi
+fi
+
+
