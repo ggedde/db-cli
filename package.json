@@ -1,8 +1,10 @@
 {
   "name": "@ggedde/db-cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Database CLI tool for Creating, Copying, and Syncing databases quickly",
-  "bin": { "db" : "./db" },
+  "bin": {
+    "db": "./db"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ggedde/db-cli.git"
