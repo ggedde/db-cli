@@ -8,6 +8,15 @@
 \* Currently only supports mysql and mariadb  
 \* All Databases are collated as utf8mb4_unicode_ci
 
+# Installation
+    npm -i --global @ggedde/db-cli
+
+Test that the CLI is working
+    
+    db -h
+
+*\* If it does not work then you might need to add the global path to your $PATH*
+
 
 ### db copy [-o] [project_config_file]
 
