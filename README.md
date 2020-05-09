@@ -8,7 +8,7 @@
 \* Currently only supports mysql and mariadb  
 \* All Databases are collated as utf8mb4_unicode_ci  
 
-![](db-cli.gif)
+![db-cli gif](db-cli.gif)
 
 # Installation
     npm i --global @ggedde/db-cli
