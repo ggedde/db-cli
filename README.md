@@ -50,7 +50,7 @@ See Help
 &nbsp; &nbsp; -a &nbsp; Also add a new project_config_file
 
 
-### db databases
+### db list
 
 &nbsp; &nbsp; List all Project Config Files in the Databases Folder
 
