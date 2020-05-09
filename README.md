@@ -50,6 +50,11 @@ See Help
 &nbsp; &nbsp; -a &nbsp; Also add a new project_config_file
 
 
-### db list
+### db databases
 
 &nbsp; &nbsp; List all Project Config Files in the Databases Folder
+
+
+### db backups
+
+&nbsp; &nbsp; List all Backup Files in the Backups Folder
