@@ -21,7 +21,12 @@ See Help
     
     db -h
 
-*\* If it does not work then you might need to add the global path to your $PATH*
+*\* If it does not work then you might need to add the global path to your $PATH*  
+
+
+### db add [project_config_file]
+
+&nbsp; &nbsp; Adds a new project_config_file, but does not create a local database  
 
 
 ### db copy [-o] [project_config_file]
@@ -32,6 +37,13 @@ See Help
 &nbsp; &nbsp; -o &nbsp; Omits the backup files. Use only if you are sure you will not need to revert back.
 
 
+### db create [-a] [project_config_file]
+
+&nbsp; &nbsp; Creates a new database on your localhost
+
+&nbsp; &nbsp; -a &nbsp; Also add a new project_config_file
+
+
 ### db backup [-l | -r] [project_config_file]
 
 &nbsp; &nbsp; Backsup databases from both local and remote
@@ -40,23 +52,11 @@ See Help
 &nbsp; &nbsp; -r &nbsp; Backup remote database Only
 
 
-### db add [project_config_file]
+### db backups
 
-&nbsp; &nbsp; Adds a new project_config_file, but does not create a local database
-
-
-### db create [-a] [project_config_file]
-
-&nbsp; &nbsp; Creates a new database on your localhost
-
-&nbsp; &nbsp; -a &nbsp; Also add a new project_config_file
+&nbsp; &nbsp; List all Backup Files in the Backups Folder
 
 
 ### db list
 
 &nbsp; &nbsp; List all Project Config Files in the Databases Folder
-
-
-### db backups
-
-&nbsp; &nbsp; List all Backup Files in the Backups Folder
